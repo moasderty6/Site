@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 
 app.get("/", (req, res) => {
-    const userAgent = req.headers['user-agent'].toLowerCase();
+    const userAgent = req.headers['user-agent']?.toLowerCase() || "";
 
     // كلمات تدل على أنه بوت جوجل
     if (
