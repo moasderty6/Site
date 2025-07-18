@@ -6,7 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "express": "^4.18.2",  <-- هنا لازم تكون الفاصلة!
-    "axios": "^1.7.2"
+    express: "^4.18.2",  // <-- PROBLEM HERE: 'express' is not double-quoted
+    'axios': "^1.7.2"    // <-- PROBLEM HERE: 'axios' is not double-quoted (single quotes used)
   }
 }
