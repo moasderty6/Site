@@ -1,12 +1,24 @@
 {
   "name": "redirect-bridge",
   "version": "1.0.0",
+  "description": "A Node.js application to proxy content based on bot detection.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "express",
+    "proxy",
+    "bot-detection",
+    "seo",
+    "cloaking"
+  ],
+  "author": "Your Name Here",
+  "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "request-ip": "^3.3.0"
   }
 }
