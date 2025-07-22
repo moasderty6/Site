@@ -3,17 +3,19 @@ const app = express();
 const axios = require("axios");
 const dns = require('dns');
 const requestIp = require('request-ip');
-const ipToCountry = require('ip-to-country'); // استبدال geoip-lite بـ ip-to-country
 
-// --- إعدادات التهيئة ---
-const PORT = process.env.PORT || 3000;
+// --- Configuration ---
+const PORT = process.env.PORT || 10000;
 
 const SAFE_PAGE = process.env.SAFE_PAGE || "https://treesaudia.wixstudio.com/website/blank-4";
 const GRAY_PAGE = process.env.GRAY_PAGE || "https://treesaudia.wixstudio.com/website";
 
 const UAE_COUNTRY_CODE = "AE";
 
-// قائمة الكلمات المفتاحية للروبوتات
+// API URL for ip-api.com
+const GEO_API_URL = "http://ip-api.com/json/"; // Free tier - HTTP only. For HTTPS, you need a paid key.
+
+// List of common bot keywords
 const BOT_KEYWORDS = [
   "adsbot", "googlebot", "mediapartners-google", "bingbot", "yandexbot", "baiduspider",
   "crawler", "spider", "render", "wget", "curl", "python-requests", "node-fetch",
@@ -24,7 +26,8 @@ const BOT_KEYWORDS = [
   "bot", "scanner", "analyzer", "validator", "parser", "scraper"
 ];
 
-// دالة isBot
+// --- Bot Detection Functions ---
+
 async function isBot(req) {
   const ua = (req.headers['user-agent'] || "").toLowerCase();
   const ip = req.ip;
@@ -46,7 +49,7 @@ async function isBot(req) {
     console.log(`[DEBUG] isBot detected: Missing common headers. Accept: ${!!req.headers['accept']}, Language: ${!!req.headers['accept-language']}, Encoding: ${!!req.headers['accept-encoding']}`);
     return true;
   }
-
+  
   const isGoogleRelated = await isGoogleRelatedIP(ip);
   if (isGoogleRelated) {
     console.log(`[DEBUG] isBot detected: IP is Google-related (${ip})`);
@@ -74,7 +77,7 @@ async function isGoogleRelatedIP(ip) {
   });
 }
 
-// دالة الوكيل (Proxy)
+// --- Content Proxy Function ---
 async function proxyContent(targetUrl, req, res) {
   try {
     const headersToForward = {
@@ -118,12 +121,12 @@ async function proxyContent(targetUrl, req, res) {
   }
 }
 
-// --- إعدادات Express Middleware ---
+// --- Express Middleware Setup ---
 app.use(requestIp.mw());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- مسار معالجة الطلبات ---
+// --- Request Handling Route ---
 app.all("*", async (req, res) => {
   const ua = req.headers['user-agent'] || "no-agent";
   const ip = req.ip || "no-ip";
@@ -134,8 +137,19 @@ app.all("*", async (req, res) => {
 
   await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
 
-  // تحديد الموقع الجغرافي باستخدام ip-to-country
-  const countryCode = ipToCountry.getCountry(ip);
+  let countryCode = null;
+  // Use external API for GeoIP lookup
+  try {
+    // Note: ip-api.com free tier is HTTP only. For HTTPS, a paid key is usually required.
+    // Ensure your Render service allows outbound HTTP requests.
+    const geoApiResponse = await axios.get(`${GEO_API_URL}${ip}`);
+    if (geoApiResponse.data && geoApiResponse.data.status === 'success') {
+      countryCode = geoApiResponse.data.countryCode;
+    }
+  } catch (geoError) {
+    console.error(`[ERROR] GeoIP API call failed for IP ${ip}:`, geoError.message);
+    // Fallback or handle error. For now, if API fails, assume not from UAE or treat as bot.
+  }
 
   console.log(`[DEBUG] GeoIP lookup result: IP=${ip}, Country Code=${countryCode}`);
 
@@ -143,18 +157,18 @@ app.all("*", async (req, res) => {
   const isDetectedBot = await isBot(req);
 
   if (isFromUAE && !isDetectedBot) {
-    console.log("👤 مستخدم بشري من الإمارات - وكالة صفحة GRAY");
+    console.log("👤 Human user from UAE - Proxying to GRAY_PAGE");
     await proxyContent(GRAY_PAGE, req, res);
   } else {
-    console.log("🛡️ غير من الإمارات أو روبوت - وكالة صفحة SAFE");
+    console.log("🛡️ Not from UAE or detected as bot - Proxying to SAFE_PAGE");
     await proxyContent(SAFE_PAGE, req, res);
   }
 });
 
-// --- بدء الخادم ---
+// --- Start the Server ---
 app.listen(PORT, () => {
-  console.log(`🚀 الخادم يعمل على المنفذ ${PORT}`);
-  console.log(`صفحة الإمارات (GRAY_PAGE): ${GRAY_PAGE}`);
-  console.log(`صفحة باقي الدول/الروبوتات (SAFE_PAGE): ${SAFE_PAGE}`);
-  console.log("تذكر: هذا الإعداد قد يؤدي إلى مخالفة سياسات جوجل للـ 'Cloaking'.");
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`UAE Page (GRAY_PAGE): ${GRAY_PAGE}`);
+  console.log(`Other Countries/Bots Page (SAFE_PAGE): ${SAFE_PAGE}`);
+  console.log("Reminder: This setup may violate Google's 'Cloaking' policies.");
 });
