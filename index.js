@@ -3,35 +3,40 @@ const app = express();
 const axios = require("axios");
 const dns = require('dns');
 const requestIp = require('request-ip');
-const geoip = require('geoip-lite'); // إضافة مكتبة GeoIP
+const ipToCountry = require('ip-to-country'); // استبدال geoip-lite بـ ip-to-country
 
 // --- إعدادات التهيئة ---
 const PORT = process.env.PORT || 3000;
 
-// عناوين URL المستهدفة.
-const SAFE_PAGE = process.env.SAFE_PAGE || "https://treesaudia.wixstudio.com/website/blank-4"; // لباقي الدول والروبوتات
-const GRAY_PAGE = process.env.GRAY_PAGE || "https://treesaudia.wixstudio.com/website";       // للإمارات فقط
+const SAFE_PAGE = process.env.SAFE_PAGE || "https://treesaudia.wixstudio.com/website/blank-4";
+const GRAY_PAGE = process.env.GRAY_PAGE || "https://treesaudia.wixstudio.com/website";
 
-// كود دولة الإمارات
 const UAE_COUNTRY_CODE = "AE";
 
-// --- دوال الكشف عن الروبوتات ---
+// قائمة الكلمات المفتاحية للروبوتات
+const BOT_KEYWORDS = [
+  "adsbot", "googlebot", "mediapartners-google", "bingbot", "yandexbot", "baiduspider",
+  "crawler", "spider", "render", "wget", "curl", "python-requests", "node-fetch",
+  "monitor", "uptimerobot", "pingdom", "gtmetrix", "lighthouse",
+  "facebookexternalhit", "slackbot", "telegrambot", "discordbot", "preview",
+  "ahrefsbot", "semrushbot", "mj12bot", "dotbot", "petalbot", "rogerbot", "exabot",
+  "sitecheckerbot", "screaming frog", "netcraftsurvey", "prerender", "headlesschrome",
+  "bot", "scanner", "analyzer", "validator", "parser", "scraper"
+];
 
+// دالة isBot
 async function isBot(req) {
   const ua = (req.headers['user-agent'] || "").toLowerCase();
   const ip = req.ip;
 
-  // سجل الـ User-Agent عشان نشوفه
   console.log(`[DEBUG] isBot check: User-Agent = ${ua}`);
 
-  // 1. فحص شامل لوكيل المستخدم لأي كلمة مفتاحية تدل على روبوت
   const isUserAgentBot = BOT_KEYWORDS.some(bot => ua.includes(bot));
   if (isUserAgentBot) {
     console.log(`[DEBUG] isBot detected: By User-Agent keyword (${ua})`);
-    return true; // أي روبوت تم الكشف عنه بواسطة User-Agent
+    return true;
   }
 
-  // 2. فحص الرؤوس المشتركة (مؤشر ضعيف، ولكن يمكن استخدامه كطبقة إضافية)
   const commonHeadersPresent = (
     req.headers['accept'] &&
     req.headers['accept-language'] &&
@@ -41,20 +46,17 @@ async function isBot(req) {
     console.log(`[DEBUG] isBot detected: Missing common headers. Accept: ${!!req.headers['accept']}, Language: ${!!req.headers['accept-language']}, Encoding: ${!!req.headers['accept-encoding']}`);
     return true;
   }
-  
-  // نضيف طبقة DNS العكسي عشان لو في روبوتات متخفية
-  // (ده كان موجود في النسخ اللي فاتت، ممكن يكون له استخدام هنا برضه)
-  const isGoogleRelated = await isGoogleRelatedIP(ip); // دالة isGoogleRelatedIP من الكود السابق
+
+  const isGoogleRelated = await isGoogleRelatedIP(ip);
   if (isGoogleRelated) {
     console.log(`[DEBUG] isBot detected: IP is Google-related (${ip})`);
     return true;
   }
 
   console.log(`[DEBUG] isBot: No bot detected for UA: ${ua}, IP: ${ip}`);
-  return false; // لم يتم الكشف عنه كروبوت بهذه الطرق
+  return false;
 }
 
-// دالة isGoogleRelatedIP (نقلها من مكانها الأصلي لو كانت موجودة في مكان تاني)
 async function isGoogleRelatedIP(ip) {
   return new Promise(resolve => {
     if (!ip) return resolve(false);
@@ -71,7 +73,6 @@ async function isGoogleRelatedIP(ip) {
     });
   });
 }
-
 
 // دالة الوكيل (Proxy)
 async function proxyContent(targetUrl, req, res) {
@@ -118,13 +119,11 @@ async function proxyContent(targetUrl, req, res) {
 }
 
 // --- إعدادات Express Middleware ---
-
 app.use(requestIp.mw());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // --- مسار معالجة الطلبات ---
-
 app.all("*", async (req, res) => {
   const ua = req.headers['user-agent'] || "no-agent";
   const ip = req.ip || "no-ip";
@@ -135,22 +134,18 @@ app.all("*", async (req, res) => {
 
   await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
 
-  // تحديد الموقع الجغرافي
-  const geo = geoip.lookup(ip);
-  const countryCode = geo ? geo.country : null;
+  // تحديد الموقع الجغرافي باستخدام ip-to-country
+  const countryCode = ipToCountry.getCountry(ip);
 
   console.log(`[DEBUG] GeoIP lookup result: IP=${ip}, Country Code=${countryCode}`);
 
-  // فحص ما إذا كان IP من الإمارات
   const isFromUAE = countryCode === UAE_COUNTRY_CODE;
+  const isDetectedBot = await isBot(req);
 
-  // فحص ما إذا كان الزائر روبوتًا
-  const isDetectedBot = await isBot(req); // استخدم الدالة المحدثة مع الـ logs
-
-  if (isFromUAE && !isDetectedBot) { // إذا كان من الإمارات ولم يتم الكشف عنه كروبوت
+  if (isFromUAE && !isDetectedBot) {
     console.log("👤 مستخدم بشري من الإمارات - وكالة صفحة GRAY");
     await proxyContent(GRAY_PAGE, req, res);
-  } else { // إذا لم يكن من الإمارات أو كان روبوتًا حتى داخل الإمارات
+  } else {
     console.log("🛡️ غير من الإمارات أو روبوت - وكالة صفحة SAFE");
     await proxyContent(SAFE_PAGE, req, res);
   }
