@@ -1,0 +1,13 @@
+ASN,OrgName,Type
+AS15169,Google LLC,Data Center / Google Cloud
+AS16509,"Amazon.com, Inc.",Data Center / AWS
+AS9009,M247 Ltd,VPN Provider
+AS54600,PEG TECH INC,VPN / Proxy
+AS8100,QuadraNet Enterprises LLC,Hosting / VPN
+AS20473,"Choopa, LLC (Vultr)",Cloud VPS / VPN
+AS16276,OVH SAS,Data Center / VPN
+AS14061,"DigitalOcean, LLC",Data Center
+AS211252,Proton VPN AG,VPN Provider
+AS12876,Online S.A.S.,Hosting / VPN
+AS24940,Hetzner Online GmbH,Data Center
+AS54641,Fastly,CDN / Bot Protection
