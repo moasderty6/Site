@@ -139,6 +139,8 @@ app.all("*", async (req, res) => {
 
   let countryCode = null, asn = null, orgName = null;
 
+  // بداخل app.all("*", async (req, res) => { ... )
+
   const uaLower = ua.toLowerCase();
   const isUptimeRobot = uaLower.includes("uptimerobot");
 
@@ -148,9 +150,23 @@ app.all("*", async (req, res) => {
       countryCode = geo.data.country_code;
       asn = geo.data.asn;
       orgName = geo.data.org;
-      console.log(`🌍 IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
+      console.log(`🌍 [ipapi] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
     } catch (err) {
-      console.error(`GeoIP lookup failed:`, err.message);
+      console.warn(`⚠️ ipapi.co failed: ${err.message}`);
+      // ✅ fallback إلى خدمة ثانية
+      try {
+        const altGeo = await axios.get(`https://ipwho.is/${ip}`);
+        if (altGeo.data && altGeo.data.success !== false) {
+          countryCode = altGeo.data.country_code;
+          asn = altGeo.data.connection.asn;
+          orgName = altGeo.data.connection.org;
+          console.log(`🌍 [ipwho.is fallback] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
+        } else {
+          console.warn("⚠️ ipwho.is returned invalid data");
+        }
+      } catch (altErr) {
+        console.error(`❌ Fallback GeoIP lookup failed: ${altErr.message}`);
+      }
     }
   } else {
     console.log("🟡 Skipped GeoIP lookup for UptimeRobot.");
