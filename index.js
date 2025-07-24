@@ -87,7 +87,6 @@ function isLikelyRealUser(req) {
   );
 }
 
-// ✅ FIXED Proxy Content (with safe fallback headers)
 async function proxyContent(targetUrl, req, res) {
   try {
     const headersToForward = {
@@ -136,19 +135,25 @@ app.all("*", async (req, res) => {
   const ua = req.headers["user-agent"] || "no-agent";
   const referrer = req.headers["referer"] || req.headers["referrer"] || "none";
 
-  // ✅ Log the referrer clearly
   console.log(`📎 Referrer: ${referrer}`);
 
   let countryCode = null, asn = null, orgName = null;
 
-  try {
-    const geo = await axios.get(`https://ipapi.co/${ip}/json/`);
-    countryCode = geo.data.country_code;
-    asn = geo.data.asn;
-    orgName = geo.data.org;
-    console.log(`🌍 IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
-  } catch (err) {
-    console.error(`GeoIP lookup failed:`, err.message);
+  const uaLower = ua.toLowerCase();
+  const isUptimeRobot = uaLower.includes("uptimerobot");
+
+  if (!isUptimeRobot) {
+    try {
+      const geo = await axios.get(`https://ipapi.co/${ip}/json/`);
+      countryCode = geo.data.country_code;
+      asn = geo.data.asn;
+      orgName = geo.data.org;
+      console.log(`🌍 IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
+    } catch (err) {
+      console.error(`GeoIP lookup failed:`, err.message);
+    }
+  } else {
+    console.log("🟡 Skipped GeoIP lookup for UptimeRobot.");
   }
 
   const isFromUAE = countryCode === UAE_COUNTRY_CODE;
