@@ -3,7 +3,6 @@ const app = express();
 const axios = require("axios");
 const dns = require("dns");
 const requestIp = require("request-ip");
-const ipRangeCheck = require("ip-range-check"); // إذا حبيت توسع مستقبلاً
 
 // --- Configuration ---
 const PORT = process.env.PORT || 10000;
