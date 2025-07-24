@@ -43,7 +43,7 @@ fs.createReadStream("vpn_asn_full_list.csv")
 
 function isBlockedASN(asn, orgName) {
   if (!asn || !orgName) return false;
-  const cleanASN = asn.trim().toUpperCase();
+  const cleanASN = String(asn).trim().toUpperCase();
   const cleanOrg = orgName.toLowerCase();
   return blockedASNList.some(entry =>
     entry.asn === cleanASN || cleanOrg.includes(entry.orgName)
