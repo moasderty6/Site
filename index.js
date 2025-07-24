@@ -139,8 +139,6 @@ app.all("*", async (req, res) => {
 
   let countryCode = null, asn = null, orgName = null;
 
-  // بداخل app.all("*", async (req, res) => { ... )
-
   const uaLower = ua.toLowerCase();
   const isUptimeRobot = uaLower.includes("uptimerobot");
 
