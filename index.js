@@ -3,6 +3,7 @@ const app = express();
 const axios = require("axios");
 const dns = require("dns");
 const requestIp = require("request-ip");
+const ipRangeCheck = require("ip-range-check"); // إذا حبيت توسع مستقبلاً
 
 // --- Configuration ---
 const PORT = process.env.PORT || 10000;
@@ -25,6 +26,11 @@ const BOT_KEYWORDS = [
   "ahrefsbot", "semrushbot", "mj12bot", "dotbot", "petalbot", "rogerbot", "exabot",
   "sitecheckerbot", "screaming frog", "netcraftsurvey", "prerender", "headlesschrome",
   "bot", "scanner", "analyzer", "validator", "parser", "scraper"
+];
+
+// --- Suspicious User-Agents (headless/manual/bots disguised) ---
+const SUSPICIOUS_AGENTS = [
+  "headlesschrome", "phantomjs", "puppeteer", "axios", "curl", "fetch", "python"
 ];
 
 // --- Bot Detection Function ---
@@ -74,6 +80,28 @@ async function isGoogleRelatedIP(ip) {
       resolve(isGoogle);
     });
   });
+}
+
+// --- Check for real user (not bot, not automation) ---
+function isLikelyRealUser(req) {
+  const ua = (req.headers["user-agent"] || "").toLowerCase();
+  const headers = req.headers;
+
+  const basicHeadersPresent = (
+    headers["accept"] &&
+    headers["accept-language"] &&
+    headers["accept-encoding"]
+  );
+
+  const isSuspicious = SUSPICIOUS_AGENTS.some(key => ua.includes(key));
+
+  return (
+    ua.includes("mozilla") && // browsers like Chrome, Firefox
+    basicHeadersPresent &&
+    !ua.includes("bot") &&
+    !ua.includes("google") &&
+    !isSuspicious
+  );
 }
 
 // --- Proxy Target Page ---
@@ -149,12 +177,13 @@ app.all("*", async (req, res) => {
 
   const isFromUAE = countryCode === UAE_COUNTRY_CODE;
   const isDetectedBot = await isBot(req);
+  const isRealUser = isLikelyRealUser(req);
 
-  if (isFromUAE && !isDetectedBot) {
-    console.log("✅ UAE visitor, human - redirecting to GRAY_PAGE");
+  if (isFromUAE && !isDetectedBot && isRealUser) {
+    console.log("✅ UAE real visitor - redirecting to GRAY_PAGE");
     await proxyContent(GRAY_PAGE, req, res);
   } else {
-    console.log("🔒 Bot or non-UAE visitor - redirecting to SAFE_PAGE");
+    console.log("🔒 Bot / Non-UAE / Suspicious visitor - redirecting to SAFE_PAGE");
     await proxyContent(SAFE_PAGE, req, res);
   }
 });
