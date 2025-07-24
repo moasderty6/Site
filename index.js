@@ -80,7 +80,6 @@ function isLikelyRealUser(req) {
 
   const isSuspicious = SUSPICIOUS_AGENTS.some(key => ua.includes(key));
   const hasReferrer = headers["referer"] || headers["referrer"];
-  const hasCookie = headers["cookie"];
 
   return (
     ua.includes("mozilla") &&
@@ -88,8 +87,8 @@ function isLikelyRealUser(req) {
     !ua.includes("bot") &&
     !ua.includes("google") &&
     !isSuspicious &&
-    hasReferrer &&
-    hasCookie
+    hasReferrer // ✅ فقط هذا الشرط يكفي الآن
+    // no need for: && headers["cookie"]
   );
 }
 
