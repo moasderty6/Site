@@ -136,6 +136,9 @@ app.all("*", async (req, res) => {
   const ua = req.headers["user-agent"] || "no-agent";
   const referrer = req.headers["referer"] || req.headers["referrer"] || "none";
 
+  // ✅ Log the referrer clearly
+  console.log(`📎 Referrer: ${referrer}`);
+
   let countryCode = null, asn = null, orgName = null;
 
   try {
