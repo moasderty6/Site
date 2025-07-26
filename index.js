@@ -29,7 +29,7 @@ const SUSPICIOUS_AGENTS = [
   "headlesschrome", "phantomjs", "puppeteer", "axios", "curl", "fetch", "python"
 ];
 
-// --- Load Blocked ASN List from CSV ---
+// Load ASN blocklist
 let blockedASNList = [];
 fs.createReadStream("vpn_asn_blocklist_full.csv")
   .pipe(csv())
@@ -130,26 +130,11 @@ async function proxyContent(targetUrl, req, res) {
   }
 }
 
-// --- Middleware ---
 app.use(requestIp.mw());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ نقطة دخول خاصة للإعلانات تحفظ الكوكي وتعيد التوجيه
-app.get("/ad-entry", (req, res) => {
-  const hasGclid = typeof req.query.gclid !== "undefined";
-  if (hasGclid) {
-    res.cookie("from_ads", "1", {
-      maxAge: 3 * 60 * 1000,
-      httpOnly: false,
-      sameSite: "Lax"
-    });
-    console.log("🎯 Set from_ads cookie due to gclid:", req.query.gclid);
-  }
-  res.redirect("/");
-});
-
-// --- Main Route Handler ---
+// Main route handler
 app.all("*", async (req, res) => {
   const ip = req.clientIp || req.ip || "no-ip";
   const ua = req.headers["user-agent"] || "no-agent";
@@ -158,14 +143,16 @@ app.all("*", async (req, res) => {
   console.log(`📎 Referrer: ${referrer}`);
 
   const hasGclid = typeof req.query.gclid !== "undefined";
-  console.log("💡 gclid from query:", req.query.gclid);
+  const referrerLower = referrer.toLowerCase();
 
-  if (hasGclid) {
+  // 👇 كشف ذكي بدون redirect
+  if (hasGclid && referrerLower.includes("google")) {
     res.cookie("from_ads", "1", {
       maxAge: 3 * 60 * 1000,
       httpOnly: false,
       sameSite: "Lax"
     });
+    console.log("🎯 Set from_ads cookie from GCLID + Referrer");
   }
 
   let countryCode = null, asn = null, orgName = null;
@@ -180,7 +167,6 @@ app.all("*", async (req, res) => {
       orgName = geo.data.org;
       console.log(`🌍 [ipapi] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
     } catch (err) {
-      console.warn(`⚠️ ipapi.co failed: ${err.message}`);
       try {
         const altGeo = await axios.get(`https://ipwho.is/${ip}`);
         if (altGeo.data && altGeo.data.success !== false) {
@@ -188,15 +174,11 @@ app.all("*", async (req, res) => {
           asn = altGeo.data.connection.asn;
           orgName = altGeo.data.connection.org;
           console.log(`🌍 [ipwho.is fallback] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
-        } else {
-          console.warn("⚠️ ipwho.is returned invalid data");
         }
       } catch (altErr) {
-        console.error(`❌ Fallback GeoIP lookup failed: ${altErr.message}`);
+        console.error(`❌ GeoIP fallback failed: ${altErr.message}`);
       }
     }
-  } else {
-    console.log("🟡 Skipped GeoIP lookup for UptimeRobot.");
   }
 
   const isFromUAE = countryCode === UAE_COUNTRY_CODE;
@@ -218,7 +200,6 @@ app.all("*", async (req, res) => {
   }
 });
 
-// --- Start Server ---
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`GRAY_PAGE: ${GRAY_PAGE}`);
