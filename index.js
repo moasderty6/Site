@@ -145,7 +145,7 @@ app.all("*", async (req, res) => {
   const hasGclid = typeof req.query.gclid !== "undefined";
   const referrerLower = referrer.toLowerCase();
 
-  // 👇 كشف ذكي بدون redirect
+  // 👇 تعيين الكوكي فقط إن كان gclid موجود وreferrer من Google
   if (hasGclid && referrerLower.includes("google")) {
     res.cookie("from_ads", "1", {
       maxAge: 3 * 60 * 1000,
