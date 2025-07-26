@@ -145,18 +145,17 @@ app.all("*", async (req, res) => {
 
   console.log(`📎 Referrer: ${referrer}`);
 
-  // ✅ فحص gclid لإعطاء كوكي مؤقت
-  try {
-    const url = new URL(req.protocol + '://' + req.get('host') + req.originalUrl);
-    const hasGclid = url.searchParams.has("gclid");
+ // ✅ فحص gclid من req.query مباشرة
+const hasGclid = typeof req.query.gclid !== "undefined";
+console.log("💡 gclid from query:", req.query.gclid);
 
-    if (hasGclid) {
-      res.cookie("from_ads", "1", {
-        maxAge: 3 * 60 * 1000, // ⏱️ صالح لمدة 3 دقائق فقط
-        httpOnly: true,
-        sameSite: "strict"
-      });
-    }
+if (hasGclid) {
+  res.cookie("from_ads", "1", {
+    maxAge: 3 * 60 * 1000, // ⏱️ صالح لمدة 3 دقائق فقط
+    httpOnly: true,
+    sameSite: "strict"
+  });
+}
   } catch (e) {
     console.warn("⚠️ Failed to parse URL:", e.message);
   }
