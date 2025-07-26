@@ -145,19 +145,16 @@ app.all("*", async (req, res) => {
 
   console.log(`📎 Referrer: ${referrer}`);
 
- // ✅ فحص gclid من req.query مباشرة
-const hasGclid = typeof req.query.gclid !== "undefined";
-console.log("💡 gclid from query:", req.query.gclid);
+  // ✅ فحص gclid من req.query مباشرة بدون try/catch
+  const hasGclid = typeof req.query.gclid !== "undefined";
+  console.log("💡 gclid from query:", req.query.gclid);
 
-if (hasGclid) {
-  res.cookie("from_ads", "1", {
-    maxAge: 3 * 60 * 1000, // ⏱️ صالح لمدة 3 دقائق فقط
-    httpOnly: true,
-    sameSite: "strict"
-  });
-}
-  } catch (e) {
-    console.warn("⚠️ Failed to parse URL:", e.message);
+  if (hasGclid) {
+    res.cookie("from_ads", "1", {
+      maxAge: 3 * 60 * 1000, // ⏱️ صالح لمدة 3 دقائق فقط
+      httpOnly: true,
+      sameSite: "strict"
+    });
   }
 
   let countryCode = null, asn = null, orgName = null;
@@ -209,11 +206,4 @@ if (hasGclid) {
     console.log("🔒 Redirecting to SAFE_PAGE");
     await proxyContent(SAFE_PAGE, req, res);
   }
-});
-
-// --- Start Server ---
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`GRAY_PAGE: ${GRAY_PAGE}`);
-  console.log(`SAFE_PAGE: ${SAFE_PAGE}`);
 });
