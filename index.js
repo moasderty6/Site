@@ -145,7 +145,7 @@ app.all("*", async (req, res) => {
 
   console.log(`📎 Referrer: ${referrer}`);
 
-  // ✅ فحص gclid من req.query مباشرة بدون try/catch
+  // ✅ فحص gclid من req.query مباشرة
   const hasGclid = typeof req.query.gclid !== "undefined";
   console.log("💡 gclid from query:", req.query.gclid);
 
@@ -206,4 +206,11 @@ app.all("*", async (req, res) => {
     console.log("🔒 Redirecting to SAFE_PAGE");
     await proxyContent(SAFE_PAGE, req, res);
   }
+});
+
+// --- Start Server ---
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`GRAY_PAGE: ${GRAY_PAGE}`);
+  console.log(`SAFE_PAGE: ${SAFE_PAGE}`);
 });
