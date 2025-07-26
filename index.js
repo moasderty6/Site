@@ -29,12 +29,13 @@ const SUSPICIOUS_AGENTS = [
 
 // --- Load Blocked ASN List from CSV ---
 let blockedASNList = [];
-fs.createReadStream("vpn_asn_full_list.csv")
+fs.createReadStream("vpn_asn_blocklist_full.csv")
   .pipe(csv())
   .on("data", (row) => {
     blockedASNList.push({
       asn: row["ASN"].trim().toUpperCase(),
       orgName: row["OrgName"].toLowerCase(),
+      type: (row["Type"] || "").toLowerCase()
     });
   })
   .on("end", () => {
@@ -45,9 +46,14 @@ function isBlockedASN(asn, orgName) {
   if (!asn || !orgName) return false;
   const cleanASN = String(asn).trim().toUpperCase();
   const cleanOrg = orgName.toLowerCase();
-  return blockedASNList.some(entry =>
-    entry.asn === cleanASN || cleanOrg.includes(entry.orgName)
-  );
+
+  return blockedASNList.some(entry => {
+    const asnMatch = entry.asn === cleanASN;
+    const orgMatch = cleanOrg.includes(entry.orgName);
+    const typeMatch = true; // ✅ تم شمل CDN أيضًا للتشدد
+
+    return (asnMatch || orgMatch) && typeMatch;
+  });
 }
 
 async function isBot(req) {
@@ -151,7 +157,6 @@ app.all("*", async (req, res) => {
       console.log(`🌍 [ipapi] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
     } catch (err) {
       console.warn(`⚠️ ipapi.co failed: ${err.message}`);
-      // ✅ fallback إلى خدمة ثانية
       try {
         const altGeo = await axios.get(`https://ipwho.is/${ip}`);
         if (altGeo.data && altGeo.data.success !== false) {
@@ -175,7 +180,7 @@ app.all("*", async (req, res) => {
   const isRealUser = isLikelyRealUser(req);
   const isASNBlocked = isBlockedASN(asn, orgName);
 
-  console.log(`🧠 Decision: UAE=${isFromUAE} | Bot=${isDetectedBot} | RealUser=${isRealUser} | ASNBlocked=${isASNBlocked}`);
+  console.log(`🧠 Decision: UAE=${isFromUAE} | Bot=${isDetectedBot} | RealUser=${isRealUser} | ASNBlocked=${isASNBlocked} | IP=${ip}`);
 
   await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
 
