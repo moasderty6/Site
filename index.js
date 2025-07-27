@@ -39,19 +39,17 @@ fs.createReadStream("vpn_asn_blocklist_full.csv")
     });
   })
   .on("end", () => {
-    console.log(`â Loaded ${blockedASNList.length} ASN entries`);
+    console.log(`✅ Loaded ${blockedASNList.length} ASN entries`);
   });
 
 function isBlockedASN(asn, orgName) {
   if (!asn || !orgName) return false;
   const cleanASN = String(asn).trim().toUpperCase();
   const cleanOrg = orgName.toLowerCase();
-
   return blockedASNList.some(entry => {
     const asnMatch = entry.asn === cleanASN;
     const orgMatch = cleanOrg.includes(entry.orgName);
-    const typeMatch = true; // â ØªÙ Ø´ÙÙ CDN Ø£ÙØ¶ÙØ§ ÙÙØªØ´Ø¯Ø¯
-
+    const typeMatch = true;
     return (asnMatch || orgMatch) && typeMatch;
   });
 }
@@ -125,7 +123,7 @@ async function proxyContent(targetUrl, req, res) {
     res.status(response.status);
     response.data.pipe(res);
   } catch (error) {
-    console.error(`â Proxy error to ${targetUrl}:`, error.message);
+    console.error(`❌ Proxy error to ${targetUrl}:`, error.message);
     res.status(500).send("Internal Server Error");
   }
 }
@@ -141,7 +139,7 @@ app.all("*", async (req, res) => {
   const ua = req.headers["user-agent"] || "no-agent";
   const referrer = req.headers["referer"] || req.headers["referrer"] || "none";
 
-  console.log(`ð Referrer: ${referrer}`);
+  console.log(`📎 Referrer: ${referrer}`);
 
   let countryCode = null, asn = null, orgName = null;
 
@@ -154,25 +152,25 @@ app.all("*", async (req, res) => {
       countryCode = geo.data.country_code;
       asn = geo.data.asn;
       orgName = geo.data.org;
-      console.log(`ð [ipapi] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
+      console.log(`🌍 [ipapi] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
     } catch (err) {
-      console.warn(`â ï¸ ipapi.co failed: ${err.message}`);
+      console.warn(`⚠️ ipapi.co failed: ${err.message}`);
       try {
         const altGeo = await axios.get(`https://ipwho.is/${ip}`);
         if (altGeo.data && altGeo.data.success !== false) {
           countryCode = altGeo.data.country_code;
           asn = altGeo.data.connection.asn;
           orgName = altGeo.data.connection.org;
-          console.log(`ð [ipwho.is fallback] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
+          console.log(`🌍 [ipwho.is fallback] IP Info - ${ip} | ${countryCode} | ${asn} | ${orgName}`);
         } else {
-          console.warn("â ï¸ ipwho.is returned invalid data");
+          console.warn("⚠️ ipwho.is returned invalid data");
         }
       } catch (altErr) {
-        console.error(`â Fallback GeoIP lookup failed: ${altErr.message}`);
+        console.error(`❌ Fallback GeoIP lookup failed: ${altErr.message}`);
       }
     }
   } else {
-    console.log("ð¡ Skipped GeoIP lookup for UptimeRobot.");
+    console.log("🟡 Skipped GeoIP lookup for UptimeRobot.");
   }
 
   const isFromUAE = countryCode === UAE_COUNTRY_CODE;
@@ -180,22 +178,22 @@ app.all("*", async (req, res) => {
   const isRealUser = isLikelyRealUser(req);
   const isASNBlocked = isBlockedASN(asn, orgName);
 
-  console.log(`ð§  Decision: UAE=${isFromUAE} | Bot=${isDetectedBot} | RealUser=${isRealUser} | ASNBlocked=${isASNBlocked} | IP=${ip}`);
+  console.log(`🧠 Decision: UAE=${isFromUAE} | Bot=${isDetectedBot} | RealUser=${isRealUser} | ASNBlocked=${isASNBlocked} | IP=${ip}`);
 
   await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 500) + 100));
 
   if (isFromUAE && !isDetectedBot && isRealUser && !isASNBlocked) {
-    console.log("â Redirecting to GRAY_PAGE");
+    console.log("✅ Redirecting to GRAY_PAGE");
     await proxyContent(GRAY_PAGE, req, res);
   } else {
-    console.log("ð Redirecting to SAFE_PAGE");
+    console.log("🔒 Redirecting to SAFE_PAGE");
     await proxyContent(SAFE_PAGE, req, res);
   }
 });
 
 // --- Start Server ---
 app.listen(PORT, () => {
-  console.log(`ð Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
   console.log(`GRAY_PAGE: ${GRAY_PAGE}`);
   console.log(`SAFE_PAGE: ${SAFE_PAGE}`);
 });
